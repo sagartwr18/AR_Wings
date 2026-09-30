@@ -1,4 +1,4 @@
-import { Pose } from '@mediapipe/pose';
+import * as mpPose from '@mediapipe/pose';
 
 /**
  * PoseTracker: Wraps MediaPipe Pose and Selfie Segmentation.
@@ -8,25 +8,60 @@ export class PoseTracker {
   constructor(onResultsCallback) {
     this.onResultsCallback = onResultsCallback;
     this.isProcessing = false;
+    this.pose = null;
 
-    this.pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
-    });
+    const PoseClass = (typeof window !== 'undefined' && window.Pose) ||
+      (mpPose && mpPose.Pose) ||
+      (mpPose && mpPose.default && mpPose.default.Pose) ||
+      (mpPose && mpPose.default);
 
-    this.pose.setOptions({
-      modelComplexity: 1,         // 0: Lite (fastest for low-end mobile), 1: Full (best accuracy)
-      smoothLandmarks: true,       // Built-in landmark smoothing
-      enableSegmentation: true,    // CRUCIAL: Person alpha mask for occlusion
-      smoothSegmentation: true,    // Boundary antialiasing
-      minDetectionConfidence: 0.55,
-      minTrackingConfidence: 0.55
-    });
+    if (!PoseClass) {
+      console.warn('⚠️ MediaPipe Pose constructor not immediately available, waiting for script load...');
+      return;
+    }
 
-    this.pose.onResults(this.onResultsCallback);
+    try {
+      this.pose = new PoseClass({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
+      });
+
+      this.pose.setOptions({
+        modelComplexity: 1,         // 0: Lite, 1: Full (best accuracy)
+        smoothLandmarks: true,       // Built-in landmark smoothing
+        enableSegmentation: true,    // Person alpha mask for occlusion
+        smoothSegmentation: true,    // Boundary antialiasing
+        minDetectionConfidence: 0.55,
+        minTrackingConfidence: 0.55
+      });
+
+      this.pose.onResults(this.onResultsCallback);
+      console.log('✅ MediaPipe Pose Tracker initialized successfully.');
+    } catch (err) {
+      console.error('Failed to initialize MediaPipe Pose:', err);
+    }
   }
 
   async sendFrame(videoElement) {
-    if (this.isProcessing || !videoElement || !videoElement.videoWidth) {
+    if (!this.pose && typeof window !== 'undefined' && window.Pose) {
+      try {
+        this.pose = new window.Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
+        });
+        this.pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: true,
+          smoothSegmentation: true,
+          minDetectionConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+        this.pose.onResults(this.onResultsCallback);
+      } catch (e) {
+        console.error('Lazy init Pose failed:', e);
+      }
+    }
+
+    if (!this.pose || this.isProcessing || !videoElement || !videoElement.videoWidth) {
       return;
     }
     this.isProcessing = true;

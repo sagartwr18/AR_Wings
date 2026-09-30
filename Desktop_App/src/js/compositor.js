@@ -51,6 +51,28 @@ export class Compositor {
     return { sx, sy, sw, sh, videoW, videoH };
   }
 
+  renderBackground(isMirrored = true) {
+    const w = this.bgCanvas.width;
+    const h = this.bgCanvas.height;
+    if (!w || !h || !this.video || !this.video.videoWidth) return null;
+
+    const crop = this.getCropRect(w, h);
+    this.lastCrop = crop;
+
+    this.bgCtx.save();
+    if (isMirrored) {
+      this.bgCtx.translate(w, 0);
+      this.bgCtx.scale(-1, 1);
+    }
+    this.bgCtx.drawImage(
+      this.video,
+      crop.sx, crop.sy, crop.sw, crop.sh,
+      0, 0, w, h
+    );
+    this.bgCtx.restore();
+    return crop;
+  }
+
   render(segmentationMask, isMirrored = true) {
     const w = this.bgCanvas.width;
     const h = this.bgCanvas.height;

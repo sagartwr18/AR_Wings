@@ -72,52 +72,59 @@ class ARWingsApp {
   async init() {
     this.updateStatus('loading', 'Initializing camera & 3D scene...');
 
-    // 1. Setup Three.js 3D Scene
-    this.threeScene = new ThreeScene(this.threeCanvas);
-
-    // 2. Setup Compositor
-    this.compositor = new Compositor(this.bgCanvas, this.fgCanvas, this.video);
-
-    // 3. Setup 3D Wings Controller & Load hiswings.glb
-    this.wingsController = new WingsController(
-      this.threeScene.getScene(),
-      this.threeScene.getCamera()
-    );
-
     try {
-      await this.wingsController.loadModel('./models/hiswings.glb');
+      // 1. Setup Three.js 3D Scene
+      this.threeScene = new ThreeScene(this.threeCanvas);
+
+      // 2. Setup Compositor
+      this.compositor = new Compositor(this.bgCanvas, this.fgCanvas, this.video);
+
+      // 3. Setup 3D Wings Controller & Load hiswings.glb
+      this.wingsController = new WingsController(
+        this.threeScene.getScene(),
+        this.threeScene.getCamera()
+      );
+
+      try {
+        await this.wingsController.loadModel('./models/hiswings.glb');
+      } catch (err) {
+        console.warn('Model load notice:', err);
+      }
+
+      // 4. Setup Floating Feather Particle System
+      this.particles = new ParticleSystem(this.threeScene.getScene(), 90);
+
+      // 5. Initialize Camera
+      this.cameraManager = new CameraManager(this.video);
+      try {
+        await this.cameraManager.initialize('user');
+      } catch (err) {
+        console.error('Camera permission required:', err);
+        this.updateStatus('idle', 'Camera access required');
+      }
+
+      // 6. Handle Window Resizing
+      this.handleResize();
+      window.addEventListener('resize', () => this.handleResize());
+
+      // 7. Setup MediaPipe Pose Tracker
+      try {
+        this.poseTracker = new PoseTracker((results) => this.onPoseResults(results));
+      } catch (e) {
+        console.error('Pose tracker error:', e);
+      }
+
+      // 8. Bind UI Events
+      this.setupUIEvents();
+
+      this.updateStatus('idle', 'Step in front of the mirror');
     } catch (err) {
-      this.updateStatus('idle', 'Model load failed. Check console.');
-      return;
+      console.error('Initialization error:', err);
+      this.updateStatus('idle', 'Step in front of the mirror');
+    } finally {
+      // 9. Start Main Loop
+      requestAnimationFrame((t) => this.loop(t));
     }
-
-    // 4. Setup Floating Feather Particle System
-    this.particles = new ParticleSystem(this.threeScene.getScene(), 90);
-
-    // 5. Initialize Camera
-    this.cameraManager = new CameraManager(this.video);
-    try {
-      await this.cameraManager.initialize('user');
-    } catch (err) {
-      this.updateStatus('idle', 'Camera permission required.');
-      return;
-    }
-
-    // 6. Handle Window Resizing
-    this.handleResize();
-    window.addEventListener('resize', () => this.handleResize());
-
-    // 7. Setup MediaPipe Pose Tracker
-    this.updateStatus('loading', 'Starting AI Pose Tracking...');
-    this.poseTracker = new PoseTracker((results) => this.onPoseResults(results));
-
-    // 8. Bind UI Events
-    this.setupUIEvents();
-
-    this.updateStatus('idle', 'Step in front of the mirror');
-
-    // 9. Start Main Loop
-    requestAnimationFrame((t) => this.loop(t));
   }
 
   setupUIEvents() {
@@ -430,28 +437,35 @@ class ARWingsApp {
     const delta = (timestamp - this.lastTime) / 1000.0;
     this.lastTime = timestamp;
 
-    // 1. Send latest frame to MediaPipe Pose with pacing (~30 FPS AI inference)
-    if (this.video.readyState >= 2 && timestamp - this.lastPoseTime >= 32) {
+    // 1. Render camera background video immediately on every frame
+    if (this.video.readyState >= 2 && this.compositor) {
+      this.compositor.renderBackground(this.cameraManager ? this.cameraManager.isMirrored : true);
+    }
+
+    // 2. Send latest frame to MediaPipe Pose with pacing (~30 FPS AI inference)
+    if (this.poseTracker && this.video.readyState >= 2 && timestamp - this.lastPoseTime >= 32) {
       this.lastPoseTime = timestamp;
       this.poseTracker.sendFrame(this.video);
     }
 
-    // 2. Continuous presence check & gender state update (2s timer on user exit)
+    // 3. Continuous presence check & gender state update (2s timer on user exit)
     const isPersonPresent = Boolean(
-      this.lastPoseDetectedTime && (timestamp - this.lastPoseDetectedTime < 400)
+      this.lastPoseDetectedTime && (timestamp - this.lastPoseDetectedTime < 500)
     );
     this.genderDetector.update(this.video, isPersonPresent, timestamp);
 
-    // 3. Animate 3D wings (idle breathing + arm-flap gesture) on female
+    // 4. Animate 3D wings (idle breathing + arm-flap gesture) on female
     if (this.genderDetector.isFemale()) {
       this.wingsController.animate(delta, this.wristVelocity);
       this.particles.update(delta);
     }
 
-    // 4. Render Three.js 3D Layer
-    this.threeScene.render();
+    // 5. Render Three.js 3D Layer
+    if (this.threeScene) {
+      this.threeScene.render();
+    }
 
-    // 5. Update FPS Monitor
+    // 6. Update FPS Monitor
     this.frameCount++;
     if (timestamp - this.fpsTimer >= 1000) {
       this.fps = this.frameCount;
