@@ -247,17 +247,26 @@ face_caffe = os.path.join(MODELS_DIR, "res10_300x300_ssd_iter_140000.caffemodel"
 
 if os.path.exists(face_proto) and os.path.exists(face_caffe):
     try:
-        face_net = cv2.dnn.readNetFromCaffe(face_proto, face_caffe)
-        print("[OK] OpenCV SSD Face Detector initialized.")
+        if hasattr(cv2, 'dnn') and hasattr(cv2.dnn, 'readNetFromCaffe'):
+            face_net = cv2.dnn.readNetFromCaffe(face_proto, face_caffe)
+            print("[OK] OpenCV SSD Face Detector initialized.")
+        else:
+            face_net = None
     except Exception as e:
         print(f"[WARN] Could not load Caffe face detector: {e}")
         face_net = None
 else:
     face_net = None
 
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-)
+face_cascade = None
+try:
+    if hasattr(cv2, 'CascadeClassifier') and hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        )
+except Exception as e:
+    print(f"[WARN] Could not load Haar cascade: {e}")
+    face_cascade = None
 
 model_path = os.path.join(MODELS_DIR, "fairface_alldata_4race_20191111.pt")
 model = models.resnet34(weights=None)
@@ -335,19 +344,23 @@ def extract_face_crop(frame):
             if crop.size > 0:
                 return crop, [int(cx1), int(cy1), int(cx2 - cx1), int(cy2 - cy1)]
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(50, 50))
-    if len(faces) > 0:
-        faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-        x, y, fw, fh = faces_sorted[0]
-        pad = int(0.20 * max(fw, fh))
-        x1 = max(0, x - pad)
-        y1 = max(0, y - pad)
-        x2 = min(w, x + fw + pad)
-        y2 = min(h, y + fh + pad)
-        crop = frame[y1:y2, x1:x2]
-        if crop.size > 0:
-            return crop, [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]
+    if face_cascade is not None:
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(50, 50))
+            if len(faces) > 0:
+                faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+                x, y, fw, fh = faces_sorted[0]
+                pad = int(0.20 * max(fw, fh))
+                x1 = max(0, x - pad)
+                y1 = max(0, y - pad)
+                x2 = min(w, x + fw + pad)
+                y2 = min(h, y + fh + pad)
+                crop = frame[y1:y2, x1:x2]
+                if crop.size > 0:
+                    return crop, [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]
+        except Exception as e:
+            print(f"[WARN] Haar detection failed: {e}")
 
     if min(h, w) >= 80:
         return frame, [0, 0, w, h]
