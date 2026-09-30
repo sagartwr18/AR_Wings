@@ -7,7 +7,7 @@ import { Compositor } from './compositor.js';
 import { ParticleSystem } from './particleSystem.js';
 import { PoseTracker } from './poseTracker.js';
 import { Point3DFilter } from './oneEuroFilter.js';
-import { GenderDetector } from './genderDetector.js';
+import { GenderDetector, getApiBaseUrl } from './genderDetector.js';
 
 class ARWingsApp {
   constructor() {
@@ -239,7 +239,8 @@ class ARWingsApp {
       const dataUrl = snapCanvas.toDataURL('image/jpeg', 0.92);
 
       // 3. Post to backend to save on disk and database.json
-      const response = await fetch('http://127.0.0.1:8000/api/save_capture', {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/save_capture`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: dataUrl, gender: 'female' })

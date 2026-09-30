@@ -65,10 +65,14 @@ def get_local_ip():
         return "127.0.0.1"
 
 def get_claim_base_url():
-    """Returns the public tunnel URL if available, or local LAN IP."""
+    """Returns the public tunnel URL if available, or Render URL / local IP."""
     pub = os.environ.get("PUBLIC_URL")
     if pub:
         return pub.rstrip("/")
+
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if render_url:
+        return render_url.rstrip("/")
 
     tunnel_file = os.path.join(BASE_DIR, "tunnel.txt")
     if os.path.exists(tunnel_file):
@@ -79,6 +83,9 @@ def get_claim_base_url():
                     return t_url.rstrip("/")
         except Exception:
             pass
+
+    if os.environ.get("RENDER"):
+        return "https://ar-wings-backend.onrender.com"
 
     local_ip = get_local_ip()
     return f"http://{local_ip}:8000"

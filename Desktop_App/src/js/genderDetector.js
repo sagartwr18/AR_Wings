@@ -3,10 +3,21 @@
  * Captures high-resolution video snapshots and communicates with the FairFace FastAPI service
  * with robust voting stabilization and 2-second auto-reset on user exit.
  */
+export function getApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.')) {
+      return 'http://127.0.0.1:8000';
+    }
+  }
+  return 'https://ar-wings-backend.onrender.com';
+}
+
 export class GenderDetector {
   constructor(options = {}) {
-    this.apiEndpoint = options.apiEndpoint || 'http://127.0.0.1:8000/predict_base64';
-    this.healthEndpoint = options.healthEndpoint || 'http://127.0.0.1:8000/health';
+    const baseUrl = options.baseUrl || getApiBaseUrl();
+    this.apiEndpoint = options.apiEndpoint || `${baseUrl}/predict_base64`;
+    this.healthEndpoint = options.healthEndpoint || `${baseUrl}/health`;
     this.pollIntervalMs = options.pollIntervalMs || 250; // Check every 250ms for responsive tracking
     this.votingDurationMs = options.votingDurationMs || 1800; // 1.8s window to stabilize decision
     this.resetTimeoutMs = options.resetTimeoutMs || 2000; // Exactly 2 seconds reset when user steps away
