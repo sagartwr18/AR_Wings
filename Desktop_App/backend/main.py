@@ -175,6 +175,8 @@ def supabase_update_record(capture_id: str, updates: dict):
 # -------------------------------
 def load_email_config():
     default_config = {
+        "resend_api_key": "",
+        "brevo_api_key": "",
         "smtp_host": "smtp.gmail.com",
         "smtp_port": 587,
         "smtp_user": "",
@@ -190,25 +192,98 @@ def load_email_config():
         except Exception:
             pass
 
+    default_config["resend_api_key"] = os.environ.get("RESEND_API_KEY", default_config.get("resend_api_key", "")).strip()
+    default_config["brevo_api_key"] = os.environ.get("BREVO_API_KEY", default_config.get("brevo_api_key", "")).strip()
     default_config["smtp_host"] = os.environ.get("SMTP_HOST", default_config.get("smtp_host", "smtp.gmail.com"))
     default_config["smtp_port"] = int(os.environ.get("SMTP_PORT", default_config.get("smtp_port", 587)))
     default_config["smtp_user"] = os.environ.get("SMTP_USER", default_config.get("smtp_user", "")).strip()
     default_config["smtp_pass"] = os.environ.get("SMTP_PASS", default_config.get("smtp_pass", "")).strip().replace(" ", "")
+    default_config["from_email"] = os.environ.get("FROM_EMAIL", default_config.get("from_email", "KIVAS TECH <onboarding@resend.dev>")).strip()
+    default_config["subject"] = os.environ.get("SUBJECT", default_config.get("subject", "Your AR Angel Wings Photo is Here! ✨")).strip()
     return default_config
 
+def send_via_resend_api(api_key: str, from_email: str, to_email: str, subject: str, body_text: str, image_bytes: bytes):
+    """Sends email via Resend HTTPS REST API (Port 443 - 100% works on Render free tier)."""
+    endpoint = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": "AR-Wings-App/1.0"
+    }
+
+    attachments = []
+    if image_bytes:
+        b64_img = base64.b64encode(image_bytes).decode("utf-8")
+        attachments.append({
+            "filename": "MyAngelWings.jpg",
+            "content": b64_img
+        })
+
+    # Resend default testing from address is onboarding@resend.dev
+    sender = from_email if ("@" in from_email and not from_email.endswith("@gmail.com")) else "AR Wings <onboarding@resend.dev>"
+
+    payload = {
+        "from": sender,
+        "to": [to_email],
+        "subject": subject,
+        "text": body_text,
+        "attachments": attachments
+    }
+
+    req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        if resp.status in (200, 201):
+            print(f"[SUCCESS] Email delivered to {to_email} via Resend REST API!")
+            return True
+        return False
+
+def send_via_brevo_api(api_key: str, from_email: str, to_email: str, subject: str, body_text: str, image_bytes: bytes):
+    """Sends email via Brevo HTTPS REST API (Port 443 - 100% works on Render free tier)."""
+    endpoint = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json",
+        "User-Agent": "AR-Wings-App/1.0"
+    }
+
+    attachment = []
+    if image_bytes:
+        b64_img = base64.b64encode(image_bytes).decode("utf-8")
+        attachment.append({
+            "name": "MyAngelWings.jpg",
+            "content": b64_img
+        })
+
+    sender_email = "sagartwr18@gmail.com"
+    if "@" in from_email:
+        sender_email = from_email.split("<")[-1].replace(">", "").strip()
+
+    payload = {
+        "sender": {"name": "KIVAS TECH", "email": sender_email},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "textContent": body_text,
+        "attachment": attachment
+    }
+
+    req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        if resp.status in (200, 201):
+            print(f"[SUCCESS] Email delivered to {to_email} via Brevo REST API!")
+            return True
+        return False
+
 def send_wings_email_from_bytes(to_email: str, phone: str, image_bytes: bytes):
-    """Sends the user their AR Angel Wings photo directly from memory."""
+    """Sends the user their AR Angel Wings photo directly from memory using HTTPS REST or SMTP."""
     config = load_email_config()
+    resend_key = config.get("resend_api_key", "").strip()
+    brevo_key = config.get("brevo_api_key", "").strip()
     smtp_host = config.get("smtp_host", "smtp.gmail.com")
     smtp_port = int(config.get("smtp_port", 587))
     smtp_user = config.get("smtp_user", "").strip()
     smtp_pass = config.get("smtp_pass", "").strip().replace(" ", "")
-    from_email = config.get("from_email") or smtp_user or "wings@kivastech.com"
+    from_email = config.get("from_email") or "KIVAS TECH <onboarding@resend.dev>"
     subject = config.get("subject", "Your AR Angel Wings Photo is Here! ✨")
-
-    if not (smtp_user and smtp_pass):
-        print(f"[NOTICE] SMTP credentials not set. Simulated email dispatch to: {to_email} (Phone: {phone})")
-        return False
 
     body_text = f"""Hello!
 
@@ -224,6 +299,25 @@ KIVAS TECH Interactive AR Kiosk
 Phone: {phone}
 """
 
+    # 1. First priority for Cloud Deployments: Resend HTTPS REST API (Port 443 - Never Blocked)
+    if resend_key:
+        try:
+            return send_via_resend_api(resend_key, from_email, to_email, subject, body_text, image_bytes)
+        except Exception as e:
+            print(f"[WARN] Resend API failed ({e}), attempting next method...")
+
+    # 2. Second priority: Brevo HTTPS REST API (Port 443 - Never Blocked)
+    if brevo_key:
+        try:
+            return send_via_brevo_api(brevo_key, from_email, to_email, subject, body_text, image_bytes)
+        except Exception as e:
+            print(f"[WARN] Brevo API failed ({e}), attempting next method...")
+
+    # 3. Third priority: Direct SMTP (SSL 465 or STARTTLS 587)
+    if not (smtp_user and smtp_pass):
+        print(f"[NOTICE] Email credentials not set. Simulated email dispatch to: {to_email} (Phone: {phone})")
+        return False
+
     msg = MIMEMultipart()
     msg["From"] = from_email
     msg["To"] = to_email
@@ -234,13 +328,25 @@ Phone: {phone}
         image_attachment = MIMEImage(image_bytes, name="MyAngelWings.jpg")
         msg.attach(image_attachment)
 
+    # Try SMTP SSL on 465 first
     try:
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
+        server = smtplib.SMTP_SSL(smtp_host, 465, timeout=10)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        print(f"[SUCCESS] Real email delivered to {to_email} via SMTP_SSL 465!")
+        return True
+    except Exception as e_ssl:
+        print(f"[DEBUG] SMTP_SSL 465 attempt: {e_ssl}")
+
+    # Fallback to STARTTLS on 587
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
         server.quit()
-        print(f"[SUCCESS] Real email delivered to {to_email} with photo attached!")
+        print(f"[SUCCESS] Real email delivered to {to_email} with photo attached via SMTP 587!")
         return True
     except Exception as e:
         print(f"[ERROR] SMTP sending failed: {e}")

@@ -1,4 +1,6 @@
 {
+  "resend_api_key": "",
+  "brevo_api_key": "",
   "smtp_host": "smtp.gmail.com",
   "smtp_port": 587,
   "smtp_user": "sagartwr18@gmail.com",
