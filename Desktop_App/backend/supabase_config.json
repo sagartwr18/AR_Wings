@@ -1,0 +1,5 @@
+{
+  "supabase_url": "https://jbhvyuxfsmziksrxtfor.supabase.co",
+  "supabase_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiaHZ5dXhmc216aWtzcnh0Zm9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3Njk2OTQsImV4cCI6MjEwNjM0NTY5NH0.mIPD25FfhueTl2MsqPSvOJI8dMsYAHA3ogy9tlIbWV8",
+  "table_name": "kiosk_leads"
+}

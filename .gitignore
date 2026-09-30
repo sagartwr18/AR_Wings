@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+dist-electron/
+build/
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment and sensitive configurations
+*.env
+.env.local
+.env.*.local
+*.log
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+
+# Temporary capture and tunnel files
+tunnel.txt
+captures/
+database.json
+
+# Video recordings
+*.mp4
+*.mkv
+*.mov
+
