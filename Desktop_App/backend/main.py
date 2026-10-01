@@ -219,8 +219,13 @@ def send_via_resend_api(api_key: str, from_email: str, to_email: str, subject: s
             "content": b64_img
         })
 
-    # Resend default testing from address is onboarding@resend.dev
-    sender = from_email if ("@" in from_email and not from_email.endswith("@gmail.com")) else "AR Wings <onboarding@resend.dev>"
+    # Resend requires onboarding@resend.dev unless a custom verified domain is configured
+    if from_email and "@resend.dev" in from_email:
+        sender = from_email
+    elif from_email and "@" in from_email and not any(p in from_email.lower() for p in ["gmail.com", "yahoo.", "outlook.", "hotmail.", "icloud."]):
+        sender = from_email
+    else:
+        sender = "KIVAS TECH <onboarding@resend.dev>"
 
     payload = {
         "from": sender,
