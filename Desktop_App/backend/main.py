@@ -265,29 +265,39 @@ def send_via_brevo_api(api_key: str, from_email: str, to_email: str, subject: st
         })
 
     sender_email = "sagartwr18@gmail.com"
+    sender_name = "KIVAS TECH"
     if "@" in from_email:
-        sender_email = from_email.split("<")[-1].replace(">", "").strip()
+        clean = from_email.split("<")[-1].replace(">", "").strip()
+        if clean and not clean.endswith("@resend.dev"):
+            sender_email = clean
+        if "<" in from_email:
+            sender_name = from_email.split("<")[0].strip() or "KIVAS TECH"
 
     payload = {
-        "sender": {"name": "KIVAS TECH", "email": sender_email},
+        "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": to_email}],
         "subject": subject,
         "textContent": body_text,
         "attachment": attachment
     }
 
-    req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        if resp.status in (200, 201):
-            print(f"[SUCCESS] Email delivered to {to_email} via Brevo REST API!")
-            return True
-        return False
+    try:
+        req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status in (200, 201):
+                print(f"[SUCCESS] Email delivered to {to_email} via Brevo REST API!")
+                return True
+            return False
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8", errors="ignore")
+        print(f"[ERROR] Brevo API error ({e.code}): {err_msg}")
+        raise e
 
 def send_wings_email_from_bytes(to_email: str, phone: str, image_bytes: bytes):
     """Sends the user their AR Angel Wings photo directly from memory using HTTPS REST or SMTP."""
     config = load_email_config()
-    resend_key = config.get("resend_api_key", "").strip()
     brevo_key = config.get("brevo_api_key", "").strip()
+    resend_key = config.get("resend_api_key", "").strip()
     smtp_host = config.get("smtp_host", "smtp.gmail.com")
     smtp_port = int(config.get("smtp_port", 587))
     smtp_user = config.get("smtp_user", "").strip()
@@ -309,19 +319,21 @@ KIVAS TECH Interactive AR Kiosk
 Phone: {phone}
 """
 
-    # 1. First priority for Cloud Deployments: Resend HTTPS REST API (Port 443 - Never Blocked)
-    if resend_key:
-        try:
-            return send_via_resend_api(resend_key, from_email, to_email, subject, body_text, image_bytes)
-        except Exception as e:
-            print(f"[WARN] Resend API failed ({e}), attempting next method...")
-
-    # 2. Second priority: Brevo HTTPS REST API (Port 443 - Never Blocked)
+    # 1. First priority: Brevo HTTPS REST API (Delivers to ANY recipient worldwide without domain verification)
     if brevo_key:
         try:
-            return send_via_brevo_api(brevo_key, from_email, to_email, subject, body_text, image_bytes)
+            if send_via_brevo_api(brevo_key, from_email, to_email, subject, body_text, image_bytes):
+                return True
         except Exception as e:
             print(f"[WARN] Brevo API failed ({e}), attempting next method...")
+
+    # 2. Second priority: Resend HTTPS REST API
+    if resend_key:
+        try:
+            if send_via_resend_api(resend_key, from_email, to_email, subject, body_text, image_bytes):
+                return True
+        except Exception as e:
+            print(f"[WARN] Resend API failed ({e}), attempting next method...")
 
     # 3. Third priority: Direct SMTP (SSL 465 or STARTTLS 587)
     if not (smtp_user and smtp_pass):
