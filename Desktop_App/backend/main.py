@@ -230,12 +230,17 @@ def send_via_resend_api(api_key: str, from_email: str, to_email: str, subject: s
         "attachments": attachments
     }
 
-    req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        if resp.status in (200, 201):
-            print(f"[SUCCESS] Email delivered to {to_email} via Resend REST API!")
-            return True
-        return False
+    try:
+        req = urllib.request.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status in (200, 201):
+                print(f"[SUCCESS] Email delivered to {to_email} via Resend REST API!")
+                return True
+            return False
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8", errors="ignore")
+        print(f"[ERROR] Resend API error ({e.code}): {err_msg}")
+        raise e
 
 def send_via_brevo_api(api_key: str, from_email: str, to_email: str, subject: str, body_text: str, image_bytes: bytes):
     """Sends email via Brevo HTTPS REST API (Port 443 - 100% works on Render free tier)."""
