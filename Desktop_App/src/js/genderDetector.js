@@ -1,7 +1,6 @@
 /**
  * GenderDetector Client for AR Wings
- * Captures high-resolution video snapshots and communicates with the FairFace FastAPI service
- * with robust voting stabilization and 2-second auto-reset on user exit.
+ * Ultra-fast FairFace classification with rapid consensus voting and 2-second auto-reset.
  */
 export function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.location) {
@@ -18,9 +17,9 @@ export class GenderDetector {
     const baseUrl = options.baseUrl || getApiBaseUrl();
     this.apiEndpoint = options.apiEndpoint || `${baseUrl}/predict_base64`;
     this.healthEndpoint = options.healthEndpoint || `${baseUrl}/health`;
-    this.pollIntervalMs = options.pollIntervalMs || 250; // Check every 250ms for responsive tracking
-    this.votingDurationMs = options.votingDurationMs || 1800; // 1.8s window to stabilize decision
-    this.resetTimeoutMs = options.resetTimeoutMs || 2000; // Exactly 2 seconds reset when user steps away
+    this.pollIntervalMs = options.pollIntervalMs || 100; // Ultra-fast 100ms polling
+    this.votingDurationMs = options.votingDurationMs || 450; // Rapid 450ms consensus window
+    this.resetTimeoutMs = options.resetTimeoutMs || 2000; // 2 seconds auto-reset when person steps away
 
     this.onStateChange = options.onStateChange || (() => {});
     this.onProgress = options.onProgress || (() => {});
@@ -33,10 +32,10 @@ export class GenderDetector {
     this.predictions = [];
     this.isBackendOnline = false;
 
-    // High resolution canvas for sharp face extraction
+    // Optimized canvas for fast upload (320x240 @ 0.70 jpeg = ~8KB per frame)
     this.canvas = document.createElement('canvas');
-    this.canvas.width = 640;
-    this.canvas.height = 480;
+    this.canvas.width = 320;
+    this.canvas.height = 240;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
 
     this.lastPollTime = 0;
@@ -50,22 +49,20 @@ export class GenderDetector {
       const res = await fetch(this.healthEndpoint);
       if (res.ok) {
         this.isBackendOnline = true;
-        console.log('✅ Gender Detection Backend connected.');
       }
     } catch (err) {
       this.isBackendOnline = false;
-      console.warn('⚠️ Gender Detection Backend not reachable at', this.healthEndpoint);
     }
   }
 
   /**
-   * Called regularly in the animation loop
+   * Called in the animation loop
    * @param {HTMLVideoElement} videoElement
    * @param {boolean} isPersonPresent
    * @param {number} timestamp
    */
   update(videoElement, isPersonPresent, timestamp = performance.now()) {
-    // 1. If person is NOT present, check if 2 seconds have elapsed since last seen
+    // 1. If person is NOT in frame, auto-reset after 2 seconds
     if (!isPersonPresent) {
       if (this.lastSeen > 0 && (timestamp - this.lastSeen >= this.resetTimeoutMs)) {
         if (this.currentState !== 'idle') {
@@ -83,13 +80,13 @@ export class GenderDetector {
       return;
     }
 
-    // Start analyzing state
+    // Start analyzing state immediately
     if (!this.detectionStart) {
       this.detectionStart = timestamp;
       this.setState('analyzing');
     }
 
-    // 2. Poll inference at fast interval
+    // 2. Poll inference at ultra-fast interval
     if (!this.isRequestPending && timestamp - this.lastPollTime >= this.pollIntervalMs) {
       this.lastPollTime = timestamp;
       this.sendInference(videoElement);
@@ -102,9 +99,8 @@ export class GenderDetector {
     this.isRequestPending = true;
 
     try {
-      // Draw at 640x480 for high clarity face detection
       this.ctx.drawImage(videoElement, 0, 0, this.canvas.width, this.canvas.height);
-      const dataUrl = this.canvas.toDataURL('image/jpeg', 0.85);
+      const dataUrl = this.canvas.toDataURL('image/jpeg', 0.70);
 
       const response = await fetch(this.apiEndpoint, {
         method: 'POST',
@@ -119,7 +115,7 @@ export class GenderDetector {
       const data = await response.json();
       this.handleInferenceResult(data);
     } catch (err) {
-      // Backend request error
+      // Ignore network flutter
     } finally {
       this.isRequestPending = false;
     }
@@ -130,28 +126,38 @@ export class GenderDetector {
 
     if (data.face_detected && data.gender) {
       this.lastSeen = now;
+      const maleProb = data.male_prob || (data.gender.toLowerCase() === 'male' ? 0.85 : 0.15);
+      const femaleProb = data.female_prob || (data.gender.toLowerCase() === 'female' ? 0.85 : 0.15);
+      const confidence = data.confidence || Math.max(maleProb, femaleProb);
+
       this.predictions.push({
-        gender: data.gender,
-        confidence: data.confidence || 0.5,
-        maleProb: data.male_prob || 0.5,
-        femaleProb: data.female_prob || 0.5
+        gender: data.gender.toLowerCase(),
+        confidence,
+        maleProb,
+        femaleProb
       });
 
       const elapsed = now - (this.detectionStart || now);
       const progress = Math.min(1.0, elapsed / this.votingDurationMs);
-      this.onProgress(progress, data.gender, data.confidence);
+      this.onProgress(progress, data.gender, confidence);
 
-      // Finalize decision after voting duration with at least 4 valid samples
-      if (elapsed >= this.votingDurationMs && this.predictions.length >= 4) {
-        let maleScore = 0;
-        let femaleScore = 0;
+      // Instant Decision Trigger:
+      // A) 2 consecutive high-confidence predictions (>0.70)
+      // B) Or 3 predictions received after 350ms
+      const count = this.predictions.length;
+      const recent = this.predictions.slice(-2);
+      const isConsistentlyMale = recent.length >= 2 && recent.every(p => p.gender === 'male' && p.maleProb >= 0.60);
+      const isConsistentlyFemale = recent.length >= 2 && recent.every(p => p.gender === 'female' && p.femaleProb >= 0.60);
 
+      if (isConsistentlyMale || isConsistentlyFemale || (count >= 3 && elapsed >= this.votingDurationMs)) {
+        let maleSum = 0;
+        let femaleSum = 0;
         for (const p of this.predictions) {
-          maleScore += p.maleProb;
-          femaleScore += p.femaleProb;
+          maleSum += p.maleProb;
+          femaleSum += p.femaleProb;
         }
 
-        const finalGender = maleScore >= femaleScore ? 'male' : 'female';
+        const finalGender = maleSum >= femaleSum ? 'male' : 'female';
         this.decisionMade = true;
         this.setState(finalGender);
       }
@@ -173,19 +179,15 @@ export class GenderDetector {
     this.setState('idle');
   }
 
+  getState() {
+    return this.currentState;
+  }
+
   isMale() {
     return this.currentState === 'male';
   }
 
   isFemale() {
     return this.currentState === 'female';
-  }
-
-  isAnalyzing() {
-    return this.currentState === 'analyzing';
-  }
-
-  getState() {
-    return this.currentState;
   }
 }

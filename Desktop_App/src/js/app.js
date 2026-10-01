@@ -128,12 +128,22 @@ class ARWingsApp {
   }
 
   setupUIEvents() {
-    this.btnCamera.addEventListener('click', async () => {
-      this.updateStatus('loading', 'Switching camera...');
-      await this.cameraManager.switchCamera();
-      this.handleResize();
-      this.updateStatus('idle', 'Camera switched');
-    });
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+
+    if (this.btnCamera) {
+      if (!isMobile) {
+        this.btnCamera.style.display = 'none';
+      } else {
+        this.btnCamera.style.display = 'flex';
+        this.btnCamera.addEventListener('click', async () => {
+          this.updateStatus('loading', 'Switching camera...');
+          await this.cameraManager.switchCamera();
+          this.handleResize();
+          this.updateStatus('idle', 'Camera switched');
+        });
+      }
+    }
 
     this.btnFullscreen.addEventListener('click', () => {
       if (!document.fullscreenElement) {
@@ -176,15 +186,18 @@ class ARWingsApp {
     if (state === 'male') {
       this.updateStatus('male', 'Male Detected');
       this.wingsController.hide();
+      this.particles.hide();
       this.hideCaptureButton();
       this.showMaleInfoPage();
     } else if (state === 'female') {
       this.updateStatus('female', 'Female Detected — Wings Attached ✨');
+      this.particles.show();
       this.showCaptureButton();
       this.hideMaleInfoPage();
     } else if (state === 'analyzing') {
       this.updateStatus('analyzing', 'Detecting user gender...');
       this.wingsController.hide();
+      this.particles.hide();
       this.hideCaptureButton();
       if (this.isInfoVisible) {
         this.hideMaleInfoPage();
@@ -192,6 +205,7 @@ class ARWingsApp {
     } else { // 'idle'
       this.updateStatus('idle', 'Step in front of the mirror');
       this.wingsController.hide();
+      this.particles.hide();
       this.hideCaptureButton();
       this.closeQrModal();
       if (this.isInfoVisible) {

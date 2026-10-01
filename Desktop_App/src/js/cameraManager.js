@@ -1,6 +1,6 @@
 /**
  * CameraManager: Handles webcam streaming, mobile camera switching (front/back),
- * and portrait aspect-ratio enforcement.
+ * and portrait aspect-ratio enforcement without stretching.
  */
 export class CameraManager {
   constructor(videoElement) {
@@ -19,16 +19,12 @@ export class CameraManager {
       this.stream = null;
     }
 
-    const idealWidth = window.innerHeight > window.innerWidth ? 1080 : 1920;
-    const idealHeight = window.innerHeight > window.innerWidth ? 1920 : 1080;
-
     const constraints = {
       audio: false,
       video: {
         facingMode: { ideal: this.currentFacingMode },
-        width: { ideal: idealWidth },
-        height: { ideal: idealHeight },
-        frameRate: { ideal: 60, min: 30 }
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
       }
     };
 
@@ -37,19 +33,27 @@ export class CameraManager {
       this.video.srcObject = this.stream;
 
       return new Promise((resolve) => {
-        this.video.onloadedmetadata = () => {
-          this.video.play();
+        const onReady = () => {
+          this.video.removeEventListener('loadeddata', onReady);
+          this.video.removeEventListener('loadedmetadata', onReady);
+          this.video.play().catch(() => {});
           resolve({
             video: this.video,
-            width: this.video.videoWidth,
-            height: this.video.videoHeight,
+            width: this.video.videoWidth || 1280,
+            height: this.video.videoHeight || 720,
             isMirrored: this.isMirrored
           });
         };
+
+        if (this.video.readyState >= 2 && this.video.videoWidth > 0) {
+          onReady();
+        } else {
+          this.video.addEventListener('loadeddata', onReady, { once: true });
+          this.video.addEventListener('loadedmetadata', onReady, { once: true });
+        }
       });
     } catch (err) {
-      console.warn('High-res camera constraints failed, attempting fallback...', err);
-      // Fallback to basic video constraint without resolution hints
+      console.warn('Standard camera constraints failed, attempting fallback...', err);
       const fallbackConstraints = {
         audio: false,
         video: { facingMode: this.currentFacingMode }
@@ -58,15 +62,24 @@ export class CameraManager {
       this.video.srcObject = this.stream;
 
       return new Promise((resolve) => {
-        this.video.onloadedmetadata = () => {
-          this.video.play();
+        const onReady = () => {
+          this.video.removeEventListener('loadeddata', onReady);
+          this.video.removeEventListener('loadedmetadata', onReady);
+          this.video.play().catch(() => {});
           resolve({
             video: this.video,
-            width: this.video.videoWidth,
-            height: this.video.videoHeight,
+            width: this.video.videoWidth || 640,
+            height: this.video.videoHeight || 480,
             isMirrored: this.isMirrored
           });
         };
+
+        if (this.video.readyState >= 2 && this.video.videoWidth > 0) {
+          onReady();
+        } else {
+          this.video.addEventListener('loadeddata', onReady, { once: true });
+          this.video.addEventListener('loadedmetadata', onReady, { once: true });
+        }
       });
     }
   }

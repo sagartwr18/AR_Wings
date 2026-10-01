@@ -610,6 +610,40 @@ html, body {
 }
 
 @media (max-width: 768px) {
+  #top-bar {
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+  }
+
+  .capture-bar {
+    bottom: max(76px, calc(env(safe-area-inset-bottom) + 68px));
+  }
+
+  .btn-capture {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+
+  .shutter-circle {
+    width: 38px;
+    height: 38px;
+  }
+
+  #bottom-ui {
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .pill {
+    padding: 9px 18px;
+    font-size: 13px;
+  }
+
+  .qr-modal-card {
+    width: 92vw;
+    padding: 24px 18px;
+  }
+
   .qr-content-row {
     flex-direction: column;
     gap: 16px;
@@ -621,14 +655,34 @@ html, body {
 
   .traits-grid {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
+    max-height: 46vh;
+    overflow-y: auto;
+    padding-right: 4px;
   }
 
-  .gender-description {
+  .trait-item {
+    min-height: 48px;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  .trait-text {
     font-size: 0.95rem;
   }
 
+  .gender-description {
+    font-size: 0.90rem;
+    margin-bottom: 12px;
+  }
+
   .gender-main-title {
-    font-size: 2.8rem;
+    font-size: 2.2rem;
+  }
+
+  .male-info-card {
+    padding: 24px 16px;
+    margin: 12px;
+    max-height: 94vh;
   }
 }
